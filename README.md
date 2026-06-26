@@ -30,6 +30,14 @@ Write JSON to a file:
 python fetch_zillow_property.py --output property.json
 ```
 
+If Zillow blocks anonymous cloud traffic with HTTP 403, provide your own browser
+session Cookie header without committing it:
+
+```bash
+export ZILLOW_COOKIE='zguid=...; other_cookie=...'
+python fetch_zillow_property.py --output property.json
+```
+
 Override the target:
 
 ```bash

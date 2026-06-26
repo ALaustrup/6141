@@ -67,7 +67,7 @@ class RateLimitedError(RuntimeError):
     """Raised when Zillow keeps responding with HTTP 429."""
 
 
-def build_session() -> requests.Session:
+def build_session(cookie_header: str | None = None) -> requests.Session:
     """Create a requests session with browser-like headers.
 
     Zillow may reject default Python clients. These headers describe a normal
@@ -89,6 +89,10 @@ def build_session() -> requests.Session:
             "Connection": "keep-alive",
         }
     )
+    if cookie_header:
+        # Allows authorized users to supply their own browser session context
+        # without hard-coding private tokens in the script.
+        session.headers["Cookie"] = cookie_header
     return session
 
 
@@ -807,12 +811,19 @@ def build_output(
     }
 
 
-def fetch_property(zpid: str, address: str, config: FetchConfig) -> dict[str, Any]:
+def fetch_property(
+    zpid: str,
+    address: str,
+    config: FetchConfig,
+    cookie_header: str | None = None,
+) -> dict[str, Any]:
     """Fetch property details using API-first, scraper-second strategy."""
 
     diagnostics = Diagnostics()
-    session = build_session()
+    session = build_session(cookie_header)
     property_url = build_property_url(zpid, address)
+    if cookie_header:
+        diagnostics.warnings.append("Using caller-supplied Zillow Cookie header; value is not logged.")
 
     check_legacy_official_api(diagnostics)
 
@@ -882,6 +893,14 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         default=float(os.getenv("ZILLOW_FETCH_MAX_DELAY", "5")),
         help="Maximum randomized delay between requests.",
     )
+    parser.add_argument(
+        "--cookie",
+        default=os.getenv("ZILLOW_COOKIE"),
+        help=(
+            "Optional Zillow Cookie header from your own browser session. "
+            "Can also be set with ZILLOW_COOKIE."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -896,7 +915,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         max_delay_seconds=args.max_delay,
     )
 
-    result = fetch_property(args.zpid, args.address, config)
+    result = fetch_property(args.zpid, args.address, config, cookie_header=args.cookie)
     output = json.dumps(result, indent=2, sort_keys=True, ensure_ascii=False)
 
     if args.output:
